@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Image Enhancer</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load canvas-confetti library -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        /* Custom styles */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Style for the file input */
+        input[type="file"]::file-selector-button {
+            background-color: #4f46e5;
+            color: white;
+            border: 0;
+            padding: 0.75rem 1.5rem;
+            font-weight: 600;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        input[type="file"]::file-selector-button:hover {
+            background-color: #4338ca;
+        }
+        /* Simple spinner */
+        .loader {
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #4f46e5;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex flex-col items-center justify-center p-4">
+
+    <div class="w-full max-w-6xl mx-auto bg-gray-800 rounded-2xl shadow-2xl p-6 md:p-10">
+        
+        <!-- Header -->
+        <header class="text-center mb-8">
+            <h1 class="text-4xl md:text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-500">
+                AI Image Enhancer
+            </h1>
+            <p class="text-gray-300 mt-2 text-lg">Upload an image to see the magic. ✨</p>
+        </header>
+
+        <!-- Main Content: Upload and Comparison -->
+        <main class="flex flex-col items-center">
+            
+            <!-- Upload Section -->
+            <div class="mb-8 w-full max-w-lg">
+                <label for="imageUpload" class="block text-sm font-medium text-gray-300 mb-2">
+                    Select a JPG or PNG image:
+                </label>
+                <input type="file" id="imageUpload" accept="image/jpeg, image/png"
+                       class="block w-full text-sm text-gray-400 file:mr-4 file:py-3 file:px-6
+                              file:rounded-lg file:border-0 file:text-sm file:font-semibold
+                              file:bg-indigo-600 file:text-white hover:file:bg-indigo-700
+                              cursor-pointer"/>
+            </div>
+
+            <!-- Status Messages -->
+            <div id="statusContainer" class="text-center h-16">
+                <!-- Loader -->
+                <div id="loader" class="hidden mx-auto">
+                    <div class="loader"></div>
+                    <p class="text-indigo-300 mt-2 font-medium">Enhancing your image... This may take a moment.</p>
+                </div>
+                <!-- Error Message -->
+                <div id="errorMessage" class="hidden p-4 bg-red-800 border border-red-600 text-red-200 rounded-lg">
+                    <!-- Error text will be inserted here -->
+                </div>
+            </div>
+
+            <!-- Comparison Section -->
+            <div id="resultContainer" class="hidden w-full grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-10">
+                
+                <!-- Before Image -->
+                <div class="flex flex-col items-center">
+                    <h2 class="text-2xl font-semibold text-gray-400 mb-4">Before</h2>
+                    <div class="w-full bg-gray-700 rounded-lg overflow-hidden shadow-lg aspect-square">
+                        <img id="beforeImage" src="" alt="Original Image" class="w-full h-full object-contain">
+                    </div>
+                </div>
+                
+                <!-- After Image -->
+                <div class="flex flex-col items-center">
+                    <h2 class="text-2xl font-semibold text-gray-400 mb-4">After (Enhanced)</h2>
+                    <div class="w-full bg-gray-700 rounded-lg overflow-hidden shadow-lg aspect-square">
+                        <img id="afterImage" src="https://placehold.co/600x600/374151/9ca3af?text=Enhanced+Image" alt="Enhanced Image" class="w-full h-full object-contain">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Download Button -->
+            <div id="downloadContainer" class="text-center mt-8 hidden">
+                <a href="#" id="downloadButton" download="enhanced-image.jpg"
+                   class="inline-block bg-gradient-to-r from-green-500 to-teal-500 text-white font-bold py-4 px-10 rounded-lg text-lg
+                          shadow-lg transform transition-transform hover:scale-105 hover:shadow-2xl focus:outline-none 
+                          focus:ring-4 focus:ring-green-400">
+                    Download Enhanced Image
+                </a>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- Footer with Credits -->
+    <footer class="text-center text-gray-500 mt-8">
+        <p>Credit - Shubham Gote | Code Assistance - ChatGPT</p>
+    </footer>
+
+    <script>
+        const imageUpload = document.getElementById('imageUpload');
+        const loader = document.getElementById('loader');
+        const errorMessage = document.getElementById('errorMessage');
+        const statusContainer = document.getElementById('statusContainer');
+        const resultContainer = document.getElementById('resultContainer');
+        const beforeImage = document.getElementById('beforeImage');
+        const afterImage = document.getElementById('afterImage');
+        const downloadContainer = document.getElementById('downloadContainer');
+        const downloadButton = document.getElementById('downloadButton');
+
+        imageUpload.addEventListener('change', handleImageUpload);
+
+        async function handleImageUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            // Reset UI
+            resetUI();
+            
+            // Show original image
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                beforeImage.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+
+            // Show loader
+            loader.classList.remove('hidden');
+            
+            // Prepare form data
+            const formData = new FormData();
+            formData.append('image', file);
+
+            try {
+                // Send to our backend API
+                const response = await fetch('/api/enhance', {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                const data = await response.json();
+
+                if (!response.ok || !data.success) {
+                    throw new Error(data.message || 'An unknown error occurred.');
+                }
+
+                // Success!
+                showResults(data.enhanced_url);
+
+            } catch (error) {
+                console.error('Upload failed:', error);
+                showError(error.message);
+            } finally {
+                loader.classList.add('hidden');
+            }
+        }
+
+        function showResults(enhancedUrl) {
+            afterImage.src = enhancedUrl;
+            downloadButton.href = enhancedUrl;
+            
+            resultContainer.classList.remove('hidden');
+            downloadContainer.classList.remove('hidden');
+        }
+
+        function showError(message) {
+            errorMessage.textContent = `Error: ${message}`;
+            errorMessage.classList.remove('hidden');
+        }
+
+        function resetUI() {
+            loader.classList.add('hidden');
+            errorMessage.classList.add('hidden');
+            errorMessage.textContent = '';
+            resultContainer.classList.add('hidden');
+            downloadContainer.classList.add('hidden');
+            beforeImage.src = 'https://placehold.co/600x600/374151/9ca3af?text=Original+Image';
+            afterImage.src = 'https://placehold.co/600x600/374151/9ca3af?text=Enhanced+Image';
+        }
+
+        // Confetti effect on download
+        downloadButton.addEventListener('click', () => {
+            confetti({
+                particleCount: 150,
+                spread: 70,
+                origin: { y: 0.6 }
+            });
+        });
+
+    </script>
+</body>
+</html>
