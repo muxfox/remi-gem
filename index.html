@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI Image Enhancer • Remini API Wrapper</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  <style>
+    :root{ --card: 255 255 255; --muted: 246 246 247; }
+    body{ font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif; }
+    .card{ background: rgb(var(--card)); border: 1px solid #e5e7eb; border-radius: 1rem; box-shadow: 0 8px 30px rgba(0,0,0,0.06); }
+    .drop{ border: 2px dashed #cbd5e1; }
+    .spinner{ border: 3px solid #e5e7eb; border-top: 3px solid #111827; border-radius: 50%; width: 28px; height: 28px; animation: spin 0.8s linear infinite;}
+    @keyframes spin { 100%{ transform: rotate(360deg);} }
+    img{ object-fit: cover; }
+  </style>
+</head>
+<body class="bg-gray-50 text-gray-900 min-h-screen">
+  <header class="max-w-6xl mx-auto px-4 py-6 flex items-center justify-between">
+    <h1 class="text-2xl md:text-3xl font-extrabold tracking-tight">Image Enhancer</h1>
+    <p class="text-xs md:text-sm opacity-70">Credit - Shubham Gote · Code assistance - ChatGPT</p>
+  </header>
+
+  <main class="max-w-6xl mx-auto px-4 pb-20">
+    <section class="card p-4 md:p-6">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="lg:col-span-1">
+          <div id="dropzone" class="drop rounded-xl p-6 bg-white text-center cursor-pointer">
+            <input id="fileInput" type="file" accept="image/*" class="hidden" />
+            <div class="flex flex-col items-center gap-3">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none"><path d="M12 16V4m0 0l-4 4m4-4l4 4M6 20h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <p class="font-semibold">Upload an image</p>
+              <p class="text-sm text-gray-500">JPG/PNG, max ~10MB recommended</p>
+              <button id="browseBtn" class="mt-2 px-4 py-2 rounded-lg bg-gray-900 text-white text-sm">Browse</button>
+            </div>
+          </div>
+          <div id="selectedName" class="mt-3 text-sm text-gray-600 hidden"></div>
+          <button id="enhanceBtn" class="w-full mt-4 px-4 py-3 rounded-xl bg-black text-white font-semibold disabled:opacity-40" disabled>Enhance</button>
+          <div id="status" class="mt-3 text-sm text-gray-600"></div>
+        </div>
+
+        <div class="lg:col-span-2">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="card overflow-hidden">
+              <div class="p-3 border-b bg-gray-50 text-sm font-semibold">Before</div>
+              <div class="aspect-square w-full bg-[rgb(var(--muted))] flex items-center justify-center">
+                <img id="beforeImg" class="w-full h-full hidden" alt="Before">
+                <div id="beforePlaceholder" class="text-gray-400">No image</div>
+              </div>
+            </div>
+
+            <div class="card overflow-hidden">
+              <div class="p-3 border-b bg-gray-50 text-sm font-semibold">After</div>
+              <div class="aspect-square w-full bg-[rgb(var(--muted))] flex items-center justify-center relative">
+                <img id="afterImg" class="w-full h-full hidden" alt="After">
+                <div id="afterPlaceholder" class="text-gray-400">No result yet</div>
+                <a id="downloadBtn" class="hidden absolute bottom-3 left-1/2 -translate-x-1/2 px-4 py-2 rounded-xl bg-black text-white text-sm" download>
+                  Download result
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const dropzone = document.getElementById('dropzone');
+    const fileInput = document.getElementById('fileInput');
+    const browseBtn = document.getElementById('browseBtn');
+    const selectedName = document.getElementById('selectedName');
+    const enhanceBtn = document.getElementById('enhanceBtn');
+    const statusEl = document.getElementById('status');
+    const beforeImg = document.getElementById('beforeImg');
+    const afterImg = document.getElementById('afterImg');
+    const beforePh = document.getElementById('beforePlaceholder');
+    const afterPh = document.getElementById('afterPlaceholder');
+    const downloadBtn = document.getElementById('downloadBtn');
+
+    let pickedFile = null;
+
+    const setStatus = (msg, loading=false) => {
+      statusEl.innerHTML = loading ? '<span class="inline-flex items-center gap-2"><span class="spinner"></span>'+msg+'</span>' : msg;
+    };
+
+    const enableEnhance = (enable) => {
+      enhanceBtn.disabled = !enable;
+    };
+
+    const preview = (file) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        beforeImg.src = reader.result;
+        beforeImg.classList.remove('hidden');
+        beforePh.classList.add('hidden');
+      };
+      reader.readAsDataURL(file);
+    };
+
+    dropzone.addEventListener('click', () => fileInput.click());
+    browseBtn.addEventListener('click', (e) => { e.stopPropagation(); fileInput.click(); });
+
+    dropzone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropzone.classList.add('bg-gray-50');
+    });
+    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('bg-gray-50'));
+    dropzone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropzone.classList.remove('bg-gray-50');
+      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+        pickedFile = e.dataTransfer.files[0];
+        selectedName.textContent = pickedFile.name;
+        selectedName.classList.remove('hidden');
+        preview(pickedFile);
+        enableEnhance(true);
+      }
+    });
+
+    fileInput.addEventListener('change', (e) => {
+      if (e.target.files && e.target.files[0]) {
+        pickedFile = e.target.files[0];
+        selectedName.textContent = pickedFile.name;
+        selectedName.classList.remove('hidden');
+        preview(pickedFile);
+        enableEnhance(true);
+      }
+    });
+
+    enhanceBtn.addEventListener('click', async () => {
+      if (!pickedFile) return;
+      setStatus("Uploading & enhancing...", true);
+      enableEnhance(false);
+      afterImg.classList.add('hidden');
+      afterPh.classList.remove('hidden');
+      downloadBtn.classList.add('hidden');
+
+      const form = new FormData();
+      form.append('image', pickedFile);
+
+      try {
+        const resp = await fetch('/process', { method: 'POST', body: form });
+        const data = await resp.json();
+
+        if (!resp.ok || !data.ok) {
+          throw new Error(data.error || 'Unknown error');
+        }
+
+        afterImg.src = data.result_url;
+        afterImg.onload = () => {
+          afterImg.classList.remove('hidden');
+          afterPh.classList.add('hidden');
+          downloadBtn.href = data.result_url;
+          downloadBtn.download = 'enhanced.jpg';
+          downloadBtn.classList.remove('hidden');
+          setStatus("Done ✔");
+        };
+      } catch (err) {
+        setStatus("Error: " + err.message);
+        enableEnhance(true);
+      }
+    });
+
+    downloadBtn.addEventListener('click', () => {
+      // celebratory confetti
+      const duration = 1500;
+      const end = Date.now() + duration;
+      (function frame() {
+        confetti({ particleCount: 2, angle: 60, spread: 55, origin: { x: 0 }});
+        confetti({ particleCount: 2, angle: 120, spread: 55, origin: { x: 1 }});
+        if (Date.now() < end) requestAnimationFrame(frame);
+      })();
+    });
+  </script>
+</body>
+</html>
